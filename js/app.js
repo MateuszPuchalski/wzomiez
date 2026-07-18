@@ -374,6 +374,17 @@ function wireUI() {
 // ---------- boot ----------
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Auto-reload once when an updated service worker takes over, so users are
+  // never stuck on a stale cached version of the app.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.update();
+    reg.addEventListener('updatefound', () => {
+      const next = reg.installing;
+      next?.addEventListener('statechange', () => {
+        if (next.state === 'activated' && hadController) location.reload();
+      });
+    });
+  }).catch(() => {});
 }
 setStatus('Loading OpenCV.js…', 'loading');

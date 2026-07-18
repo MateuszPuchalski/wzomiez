@@ -1,4 +1,4 @@
-const CACHE = 'object-dimensions-v2';
+const CACHE = 'object-dimensions-v3';
 const ASSETS = [
   './',
   'index.html',
@@ -19,6 +19,11 @@ const ASSETS = [
   'marker/aruco-4x4_50-id3.svg',
 ];
 
+// Large/immutable assets stay cache-first; the app shell is network-first so
+// deployed updates reach users on the next load instead of being pinned to a
+// stale cache forever.
+const CACHE_FIRST = /vendor\/opencv\.js$|icons\/|marker\/aruco/;
+
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
@@ -31,15 +36,20 @@ self.addEventListener('activate', e => {
   );
 });
 
+async function fromNetwork(request) {
+  const res = await fetch(request);
+  if (res.ok && new URL(request.url).origin === location.origin) {
+    const copy = res.clone();
+    caches.open(CACHE).then(c => c.put(request, copy));
+  }
+  return res;
+}
+
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
-      if (res.ok && new URL(e.request.url).origin === location.origin) {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-      }
-      return res;
-    }))
-  );
+  if (CACHE_FIRST.test(e.request.url)) {
+    e.respondWith(caches.match(e.request).then(cached => cached || fromNetwork(e.request)));
+  } else {
+    e.respondWith(fromNetwork(e.request).catch(() => caches.match(e.request)));
+  }
 });
