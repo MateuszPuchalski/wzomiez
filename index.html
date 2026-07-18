@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#101828" />
+  <title>Object Dimensions</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>📐 Object Dimensions</h1>
+    <p class="subtitle">Measure real-world object sizes with OpenCV 5 + an ArUco marker</p>
+  </header>
+
+  <div id="status" class="status loading">Loading OpenCV.js…</div>
+
+  <nav class="tabs" hidden>
+    <button id="tab-upload" class="tab active" type="button">Upload image</button>
+    <button id="tab-camera" class="tab" type="button">Live camera</button>
+  </nav>
+
+  <section class="settings" hidden>
+    <label>
+      Marker size
+      <span class="input-unit">
+        <input id="marker-size" type="number" min="5" max="500" step="1" value="50" />
+        <span>mm</span>
+      </span>
+    </label>
+    <label>
+      Units
+      <select id="units">
+        <option value="mm">mm</option>
+        <option value="cm" selected>cm</option>
+        <option value="in">inches</option>
+      </select>
+    </label>
+    <a class="marker-link" href="marker/marker.html" target="_blank" rel="noopener">🖨️ Print a marker</a>
+  </section>
+
+  <main hidden>
+    <div id="upload-pane" class="pane">
+      <label id="drop-zone" class="drop-zone" for="file-input">
+        <input id="file-input" type="file" accept="image/*" />
+        <span>Tap to choose a photo, or drop one here.<br />
+        <small>Include the printed ArUco marker in the shot, on the same surface as the objects.</small></span>
+      </label>
+    </div>
+
+    <div id="camera-pane" class="pane" hidden>
+      <div class="camera-controls">
+        <button id="camera-start" type="button">Start camera</button>
+        <button id="camera-stop" type="button" hidden>Stop camera</button>
+      </div>
+      <video id="video" playsinline muted hidden></video>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="canvas" hidden></canvas>
+    </div>
+
+    <div id="results" class="results" hidden></div>
+  </main>
+
+  <footer>
+    <p>Runs entirely in your browser — no images leave your device. Powered by OpenCV.js 5.0.</p>
+  </footer>
+
+  <script src="vendor/opencv.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Print ArUco Marker — Object Dimensions</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 2rem 1rem;
+      max-width: 40rem;
+      margin: 0 auto;
+      color: #1a2540;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: end;
+      flex-wrap: wrap;
+      margin: 1.25rem 0;
+      padding: 1rem;
+      background: #f1f4fa;
+      border-radius: 0.6rem;
+      font-size: 0.9rem;
+    }
+    .controls label { display: flex; flex-direction: column; gap: 0.3rem; }
+    select { padding: 0.4rem; font-size: 1rem; }
+    button {
+      padding: 0.55rem 1.4rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 0.5rem;
+      background: #3b82f6;
+      color: #fff;
+      cursor: pointer;
+    }
+    ol { margin: 1rem 0 1.5rem 1.25rem; line-height: 1.6; font-size: 0.95rem; }
+    .sheet { text-align: center; padding: 1rem 0; }
+    /* White quiet zone around the marker is required for reliable detection. */
+    .quiet { display: inline-block; background: #fff; padding: 10mm; border: 1px dashed #bbb; }
+    .quiet img { display: block; image-rendering: pixelated; }
+    .caption { margin-top: 0.75rem; color: #555; font-size: 0.9rem; }
+    @media print {
+      .controls, h1, ol, .no-print { display: none; }
+      .quiet { border: none; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Print your ArUco marker</h1>
+  <ol>
+    <li>Pick the marker size below, then hit <b>Print</b> (100% scale / no “fit to page”!).</li>
+    <li>Verify with a ruler that the printed black square matches the chosen size.</li>
+    <li>Place the marker <b>flat on the same surface</b> as the objects you want to measure.</li>
+    <li>In the app, set <b>Marker size</b> to the same value.</li>
+  </ol>
+  <div class="controls no-print">
+    <label>
+      Marker size
+      <select id="size">
+        <option value="40">40 mm</option>
+        <option value="50" selected>50 mm</option>
+        <option value="60">60 mm</option>
+        <option value="80">80 mm</option>
+        <option value="100">100 mm</option>
+      </select>
+    </label>
+    <label>
+      Marker id
+      <select id="id">
+        <option value="0" selected>0</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </label>
+    <button id="print" type="button">🖨️ Print</button>
+  </div>
+  <div class="sheet">
+    <span class="quiet">
+      <img id="marker" src="aruco-4x4_50-id0.svg" alt="ArUco marker" style="width: 50mm; height: 50mm;" />
+    </span>
+    <p class="caption">ArUco DICT_4X4_50 · id <span id="cap-id">0</span> · <span id="cap-size">50</span> × <span id="cap-size2">50</span> mm</p>
+  </div>
+  <script>
+    const sizeSel = document.getElementById('size');
+    const idSel = document.getElementById('id');
+    const img = document.getElementById('marker');
+    function update() {
+      const s = sizeSel.value, id = idSel.value;
+      img.src = `aruco-4x4_50-id${id}.svg`;
+      img.style.width = s + 'mm';
+      img.style.height = s + 'mm';
+      document.getElementById('cap-id').textContent = id;
+      document.getElementById('cap-size').textContent = s;
+      document.getElementById('cap-size2').textContent = s;
+    }
+    sizeSel.addEventListener('change', update);
+    idSel.addEventListener('change', update);
+    document.getElementById('print').addEventListener('click', () => window.print());
+  </script>
+</body>
+</html>
