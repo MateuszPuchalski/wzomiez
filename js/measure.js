@@ -9,6 +9,7 @@ import { detectMarker } from './aruco.js';
 const MIN_CONTOUR_AREA_PX = 200;
 const MIN_OBJECT_MM = 4;     // ignore specks smaller than 4 mm on a side
 const MAX_OBJECT_MM = 3000;  // ignore nonsense larger than 3 m
+const MERGE_GAP_MM = 5;      // fragments closer than this (in mm) are one object
 
 function rotatedRectPoints(rect) {
   const a = (rect.angle * Math.PI) / 180;
@@ -85,7 +86,8 @@ export function measureImage(cv, rgba, { markerSizeMM }) {
   const markerZoneInt = new cv.Mat();
   markerZone.convertTo(markerZoneInt, cv.CV_32SC2);
 
-  const objects = [];
+  // Pass 1: transform each surviving contour into mm space
+  const fragments = []; // {pts: [{x,y}] in mm, bbox: {x0,y0,x1,y1}}
   for (let i = 0; i < contours.size(); i++) {
     const cnt = contours.get(i);
     try {
@@ -96,35 +98,80 @@ export function measureImage(cv, rgba, { markerSizeMM }) {
       const centroid = { x: mnt.m10 / mnt.m00, y: mnt.m01 / mnt.m00 };
       if (cv.pointPolygonTest(markerZoneInt, centroid, false) >= 0) continue;
 
-      // Contour -> mm plane
       const cntF = new cv.Mat();
       cnt.convertTo(cntF, cv.CV_32FC2);
       const cntMM = new cv.Mat();
       cv.perspectiveTransform(cntF, cntMM, H);
-      const rect = cv.minAreaRect(cntMM);
-      cntF.delete();
+      const pts = matToPoints(cntMM);
+      cntF.delete(); cntMM.delete();
 
-      const wMM = Math.max(rect.size.width, rect.size.height);
-      const hMM = Math.min(rect.size.width, rect.size.height);
-      cntMM.delete();
-      if (hMM < MIN_OBJECT_MM || wMM > MAX_OBJECT_MM) continue;
-
-      // Box corners back to image pixels for drawing
-      const boxMM = pointsToMat(cv, rotatedRectPoints(rect));
-      const boxImg = new cv.Mat();
-      cv.perspectiveTransform(boxMM, boxImg, Hinv);
-      const cornersImg = matToPoints(boxImg);
-      boxMM.delete(); boxImg.delete();
-
-      objects.push({
-        cornersImg,
-        widthMM: rect.size.width,
-        heightMM: rect.size.height,
-        areaMM2: rect.size.width * rect.size.height,
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+      fragments.push({
+        pts,
+        bbox: {
+          x0: Math.min(...xs), y0: Math.min(...ys),
+          x1: Math.max(...xs), y1: Math.max(...ys),
+        },
       });
     } finally {
       cnt.delete();
     }
+  }
+
+  // Pass 2: merge fragments whose mm bounding boxes come within MERGE_GAP_MM —
+  // broken edges on a textured part yield several contours for one object.
+  const overlaps = (a, b) =>
+    a.x0 - MERGE_GAP_MM / 2 < b.x1 + MERGE_GAP_MM / 2 &&
+    b.x0 - MERGE_GAP_MM / 2 < a.x1 + MERGE_GAP_MM / 2 &&
+    a.y0 - MERGE_GAP_MM / 2 < b.y1 + MERGE_GAP_MM / 2 &&
+    b.y0 - MERGE_GAP_MM / 2 < a.y1 + MERGE_GAP_MM / 2;
+  const groups = [];
+  for (const frag of fragments) {
+    const hits = groups.filter(g => overlaps(g.bbox, frag.bbox));
+    if (hits.length === 0) {
+      groups.push({ pts: frag.pts.slice(), bbox: { ...frag.bbox } });
+    } else {
+      // merge the fragment and every group it touches into hits[0]
+      const target = hits[0];
+      target.pts.push(...frag.pts);
+      target.bbox.x0 = Math.min(target.bbox.x0, frag.bbox.x0);
+      target.bbox.y0 = Math.min(target.bbox.y0, frag.bbox.y0);
+      target.bbox.x1 = Math.max(target.bbox.x1, frag.bbox.x1);
+      target.bbox.y1 = Math.max(target.bbox.y1, frag.bbox.y1);
+      for (const g of hits.slice(1)) {
+        target.pts.push(...g.pts);
+        target.bbox.x0 = Math.min(target.bbox.x0, g.bbox.x0);
+        target.bbox.y0 = Math.min(target.bbox.y0, g.bbox.y0);
+        target.bbox.x1 = Math.max(target.bbox.x1, g.bbox.x1);
+        target.bbox.y1 = Math.max(target.bbox.y1, g.bbox.y1);
+        groups.splice(groups.indexOf(g), 1);
+      }
+    }
+  }
+
+  // Pass 3: one min-area rect per merged group
+  const objects = [];
+  for (const group of groups) {
+    const ptsMat = pointsToMat(cv, group.pts);
+    const rect = cv.minAreaRect(ptsMat);
+    ptsMat.delete();
+
+    const wMM = Math.max(rect.size.width, rect.size.height);
+    const hMM = Math.min(rect.size.width, rect.size.height);
+    if (hMM < MIN_OBJECT_MM || wMM > MAX_OBJECT_MM) continue;
+
+    const boxMM = pointsToMat(cv, rotatedRectPoints(rect));
+    const boxImg = new cv.Mat();
+    cv.perspectiveTransform(boxMM, boxImg, Hinv);
+    const cornersImg = matToPoints(boxImg);
+    boxMM.delete(); boxImg.delete();
+
+    objects.push({
+      cornersImg,
+      widthMM: rect.size.width,
+      heightMM: rect.size.height,
+      areaMM2: rect.size.width * rect.size.height,
+    });
   }
 
   markerZone.delete(); markerZoneInt.delete();

@@ -1,4 +1,4 @@
-const CACHE = 'object-dimensions-v3';
+const CACHE = 'object-dimensions-v4';
 const ASSETS = [
   './',
   'index.html',

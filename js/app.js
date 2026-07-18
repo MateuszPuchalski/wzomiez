@@ -113,7 +113,10 @@ function drawOverlay(marker, objects, opts) {
   });
 }
 
+let lastResult = null; // {marker, objects} of whatever is currently on screen
+
 function renderTable(marker, objects, opts) {
+  lastResult = { marker, objects };
   const el = $('results');
   el.hidden = false;
   if (!marker) {
@@ -133,8 +136,111 @@ function renderTable(marker, objects, opts) {
       <td>${fmt(o.widthMM, u)} ${u.label}</td>
       <td>${fmt(o.heightMM, u)} ${u.label}</td>
     </tr>`).join('');
-  el.innerHTML = `<h2>Measurements (marker id ${marker.id}, ${opts.markerSizeMM} mm)</h2>
+  el.innerHTML = `<div class="head">
+      <h2>Measurements (marker id ${marker.id}, ${opts.markerSizeMM} mm)</h2>
+      <button id="save-measure" type="button">💾 Save</button>
+    </div>
     <table><tr><th></th><th>Width</th><th>Height</th></tr>${rows}</table>`;
+  $('save-measure').addEventListener('click', saveMeasurement);
+}
+
+// ---------- saved parts (localStorage + CSV/JSON export) ----------
+
+const STORE_KEY = 'od-saved-parts';
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
+  catch { return []; }
+}
+
+function persistSaved(records) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(records)); }
+  catch { setStatus('Could not save — browser storage is full. Delete some saved parts.', 'error'); }
+}
+
+function canvasThumb() {
+  const t = document.createElement('canvas');
+  const w = 320;
+  t.width = w;
+  t.height = Math.round(canvas.height * (w / canvas.width)) || 1;
+  t.getContext('2d').drawImage(canvas, 0, 0, t.width, t.height);
+  return t.toDataURL('image/jpeg', 0.6);
+}
+
+function saveMeasurement() {
+  if (!lastResult?.objects?.length) return;
+  const name = prompt('Name this part (e.g. "mower blade 42in deck"):');
+  if (!name) return;
+  const records = loadSaved();
+  records.unshift({
+    id: Date.now().toString(36),
+    name: name.trim(),
+    date: new Date().toISOString(),
+    markerSizeMM: settings().markerSizeMM,
+    objects: lastResult.objects.map(o => ({
+      widthMM: Math.round(o.widthMM * 10) / 10,
+      heightMM: Math.round(o.heightMM * 10) / 10,
+    })),
+    thumb: canvasThumb(),
+  });
+  persistSaved(records);
+  renderSaved();
+}
+
+function download(filename, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportCSV() {
+  const lines = ['name,date,object,width_mm,height_mm'];
+  for (const r of loadSaved()) {
+    r.objects.forEach((o, i) => {
+      lines.push(`"${r.name.replace(/"/g, '""')}",${r.date},${i + 1},${o.widthMM},${o.heightMM}`);
+    });
+  }
+  download('measurements.csv', lines.join('\n'), 'text/csv');
+}
+
+function exportJSON() {
+  const records = loadSaved().map(({ thumb, ...rest }) => rest);
+  download('measurements.json', JSON.stringify(records, null, 2), 'application/json');
+}
+
+function renderSaved() {
+  const el = $('saved');
+  const records = loadSaved();
+  if (records.length === 0) { el.hidden = true; return; }
+  el.hidden = false;
+  const u = settings().units;
+  const items = records.map(r => {
+    const dims = r.objects.map(o => `${fmt(o.widthMM, u)} × ${fmt(o.heightMM, u)} ${u.label}`).join(' · ');
+    const date = new Date(r.date).toLocaleDateString();
+    return `<div class="item">
+      <img src="${r.thumb}" alt="" />
+      <div class="info">
+        <div class="name">${r.name.replace(/</g, '&lt;')}</div>
+        <div class="dims">${dims} — ${date}</div>
+      </div>
+      <button class="danger" data-del="${r.id}" title="Delete" type="button">✕</button>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="head">
+      <h2>Saved parts (${records.length})</h2>
+      <div class="actions">
+        <button id="export-csv" class="ghost" type="button">Export CSV</button>
+        <button id="export-json" class="ghost" type="button">Export JSON</button>
+      </div>
+    </div>${items}`;
+  $('export-csv').addEventListener('click', exportCSV);
+  $('export-json').addEventListener('click', exportJSON);
+  el.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+    persistSaved(loadSaved().filter(r => r.id !== btn.dataset.del));
+    renderSaved();
+  }));
 }
 
 // ---------- upload mode ----------
@@ -364,8 +470,9 @@ function wireUI() {
   });
 
   $('marker-size').addEventListener('change', reprocess);
-  $('units').addEventListener('change', reprocess);
+  $('units').addEventListener('change', () => { reprocess(); renderSaved(); });
 
+  renderSaved();
   document.querySelector('nav.tabs').hidden = false;
   document.querySelector('section.settings').hidden = false;
   document.querySelector('main').hidden = false;
