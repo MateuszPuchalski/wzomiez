@@ -16,7 +16,13 @@ offline once loaded.
    transformed into metric space and its minimum-area rectangle gives the object's
    **width × height in mm/cm/inches**, drawn on the image and listed in a table.
 
-## Running it
+## Hosted version
+
+The app deploys automatically to **GitHub Pages** on every push to `main`:
+<https://mateuszpuchalski.github.io/wzomiez/> — open it on your phone and use
+“Add to Home Screen” to install it as an app (HTTPS is provided, so the camera works).
+
+## Running it locally
 
 Any static file server works. Camera access requires **HTTPS or localhost**.
 
