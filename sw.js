@@ -1,4 +1,4 @@
-const CACHE = 'object-dimensions-v1';
+const CACHE = 'object-dimensions-v2';
 const ASSETS = [
   './',
   'index.html',
@@ -7,6 +7,7 @@ const ASSETS = [
   'js/aruco.js',
   'js/measure.js',
   'js/camera.js',
+  'js/worker.js',
   'vendor/opencv.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
