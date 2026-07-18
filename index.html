@@ -54,6 +54,7 @@
     <div id="camera-pane" class="pane" hidden>
       <div class="camera-controls">
         <button id="camera-start" type="button">Start camera</button>
+        <button id="camera-freeze" type="button" hidden>❄ Freeze</button>
         <button id="camera-stop" type="button" hidden>Stop camera</button>
       </div>
       <video id="video" playsinline muted hidden></video>
@@ -61,6 +62,7 @@
 
     <div class="canvas-wrap">
       <canvas id="canvas" hidden></canvas>
+      <div id="chip" class="chip" hidden></div>
     </div>
 
     <div id="results" class="results" hidden></div>
@@ -70,7 +72,6 @@
     <p>Runs entirely in your browser — no images leave your device. Powered by OpenCV.js 5.0.</p>
   </footer>
 
-  <script src="vendor/opencv.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
