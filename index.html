@@ -18,11 +18,6 @@
 
   <div id="status" class="status loading">Loading OpenCV.js…</div>
 
-  <nav class="tabs" hidden>
-    <button id="tab-upload" class="tab active" type="button">Upload image</button>
-    <button id="tab-camera" class="tab" type="button">Live camera</button>
-  </nav>
-
   <section class="settings" hidden>
     <label>
       Marker size
@@ -39,30 +34,27 @@
         <option value="in">inches</option>
       </select>
     </label>
+    <label class="toggle">
+      <span>AI segmentation</span>
+      <span class="input-unit">
+        <input id="use-ai" type="checkbox" checked />
+        <span class="ai-note">best accuracy · ~55 MB one-time download</span>
+      </span>
+    </label>
     <a class="marker-link" href="marker/marker.html" target="_blank" rel="noopener">🖨️ Print a marker</a>
   </section>
 
   <main hidden>
     <div id="upload-pane" class="pane">
       <label id="drop-zone" class="drop-zone" for="file-input">
-        <input id="file-input" type="file" accept="image/*" />
-        <span>Tap to choose a photo, or drop one here.<br />
+        <input id="file-input" type="file" accept="image/*" capture="environment" />
+        <span>Tap to take or choose a photo, or drop one here.<br />
         <small>Include the printed ArUco marker in the shot, on the same surface as the objects.</small></span>
       </label>
     </div>
 
-    <div id="camera-pane" class="pane" hidden>
-      <div class="camera-controls">
-        <button id="camera-start" type="button">Start camera</button>
-        <button id="camera-freeze" type="button" hidden>❄ Freeze</button>
-        <button id="camera-stop" type="button" hidden>Stop camera</button>
-      </div>
-      <video id="video" playsinline muted hidden></video>
-    </div>
-
     <div class="canvas-wrap">
       <canvas id="canvas" hidden></canvas>
-      <div id="chip" class="chip" hidden></div>
     </div>
 
     <div id="results" class="results" hidden></div>
@@ -71,7 +63,7 @@
   </main>
 
   <footer>
-    <p>Runs entirely in your browser — no images leave your device. Powered by OpenCV.js 5.0.</p>
+    <p>Runs entirely in your browser — no images leave your device. Powered by OpenCV.js 5.0 + ISNet.</p>
   </footer>
 
   <script type="module" src="js/app.js"></script>

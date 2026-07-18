@@ -48,8 +48,10 @@ function inflateQuad(pts, factor) {
 }
 
 // Measures objects in an RGBA image Mat.
+// opts.mask (optional): CV_8UC1 foreground mask from AI segmentation — used as
+// the contour source instead of the Canny edge map, same filters afterwards.
 // Returns { marker: {id, corners}|null, objects: [{cornersImg, widthMM, heightMM, areaMM2}] }
-export function measureImage(cv, rgba, { markerSizeMM }) {
+export function measureImage(cv, rgba, { markerSizeMM, mask = null }) {
   const gray = new cv.Mat();
   cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
 
@@ -68,15 +70,19 @@ export function measureImage(cv, rgba, { markerSizeMM }) {
   const Hinv = cv.getPerspectiveTransform(dstPts, srcPts);
   srcPts.delete(); dstPts.delete();
 
-  // Edge map -> closed blobs
-  const blur = new cv.Mat();
-  cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+  // Contour source: AI foreground mask if provided, else edge map -> blobs
   const edges = new cv.Mat();
-  cv.Canny(blur, edges, 50, 100);
-  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-  cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 2);
-  cv.erode(edges, edges, kernel, new cv.Point(-1, -1), 2);
-  kernel.delete(); blur.delete();
+  if (mask) {
+    cv.threshold(mask, edges, 127, 255, cv.THRESH_BINARY);
+  } else {
+    const blur = new cv.Mat();
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+    cv.Canny(blur, edges, 50, 100);
+    const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 2);
+    cv.erode(edges, edges, kernel, new cv.Point(-1, -1), 2);
+    kernel.delete(); blur.delete();
+  }
 
   const contours = new cv.MatVector();
   const hierarchy = new cv.Mat();
