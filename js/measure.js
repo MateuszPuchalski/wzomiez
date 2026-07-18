@@ -9,7 +9,8 @@ import { detectMarker } from './aruco.js';
 const MIN_CONTOUR_AREA_PX = 200;
 const MIN_OBJECT_MM = 4;     // ignore specks smaller than 4 mm on a side
 const MAX_OBJECT_MM = 3000;  // ignore nonsense larger than 3 m
-const MERGE_GAP_MM = 5;      // fragments closer than this (in mm) are one object
+const MERGE_GAP_MM = 3;      // fragments closer than this (in mm) are one object
+const BORDER_MARGIN_PX = 3;  // contours touching the frame edge are background
 
 function rotatedRectPoints(rect) {
   const a = (rect.angle * Math.PI) / 180;
@@ -47,8 +48,10 @@ function inflateQuad(pts, factor) {
 }
 
 // Measures objects in an RGBA image Mat.
+// opts.mask (optional): CV_8UC1 foreground mask from AI segmentation — used as
+// the contour source instead of the Canny edge map, same filters afterwards.
 // Returns { marker: {id, corners}|null, objects: [{cornersImg, widthMM, heightMM, areaMM2}] }
-export function measureImage(cv, rgba, { markerSizeMM }) {
+export function measureImage(cv, rgba, { markerSizeMM, mask = null }) {
   const gray = new cv.Mat();
   cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
 
@@ -67,19 +70,27 @@ export function measureImage(cv, rgba, { markerSizeMM }) {
   const Hinv = cv.getPerspectiveTransform(dstPts, srcPts);
   srcPts.delete(); dstPts.delete();
 
-  // Edge map -> closed blobs
-  const blur = new cv.Mat();
-  cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+  // Contour source: AI foreground mask if provided, else edge map -> blobs
   const edges = new cv.Mat();
-  cv.Canny(blur, edges, 50, 100);
-  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-  cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 2);
-  cv.erode(edges, edges, kernel, new cv.Point(-1, -1), 2);
-  kernel.delete(); blur.delete();
+  if (mask) {
+    cv.threshold(mask, edges, 127, 255, cv.THRESH_BINARY);
+  } else {
+    const blur = new cv.Mat();
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+    cv.Canny(blur, edges, 50, 100);
+    const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 2);
+    cv.erode(edges, edges, kernel, new cv.Point(-1, -1), 2);
+    kernel.delete(); blur.delete();
+  }
 
   const contours = new cv.MatVector();
   const hierarchy = new cv.Mat();
-  cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+  // RETR_LIST, not RETR_EXTERNAL: an object lying inside another edge ring
+  // (e.g. on the sheet of paper the marker is printed on) is an interior
+  // contour and would be invisible to EXTERNAL retrieval. The merge pass
+  // collapses the duplicate inner/outer ring contours this produces.
+  cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
   edges.delete(); hierarchy.delete();
 
   const markerZone = pointsToMat(cv, inflateQuad(marker.corners, 1.35));
@@ -92,6 +103,14 @@ export function measureImage(cv, rgba, { markerSizeMM }) {
     const cnt = contours.get(i);
     try {
       if (cv.contourArea(cnt) < MIN_CONTOUR_AREA_PX) continue;
+
+      // Contours touching the frame edge are background structure (floor
+      // seams, table edges, partially visible objects) — never a measurable
+      // object, and they chain everything they cross into one giant blob.
+      const br = cv.boundingRect(cnt);
+      if (br.x <= BORDER_MARGIN_PX || br.y <= BORDER_MARGIN_PX ||
+          br.x + br.width >= rgba.cols - BORDER_MARGIN_PX ||
+          br.y + br.height >= rgba.rows - BORDER_MARGIN_PX) continue;
 
       const mnt = cv.moments(cnt);
       if (mnt.m00 === 0) continue;
@@ -106,13 +125,17 @@ export function measureImage(cv, rgba, { markerSizeMM }) {
       cntF.delete(); cntMM.delete();
 
       const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-      fragments.push({
-        pts,
-        bbox: {
-          x0: Math.min(...xs), y0: Math.min(...ys),
-          x1: Math.max(...xs), y1: Math.max(...ys),
-        },
-      });
+      const bbox = {
+        x0: Math.min(...xs), y0: Math.min(...ys),
+        x1: Math.max(...xs), y1: Math.max(...ys),
+      };
+
+      // The sheet of paper the marker is printed on: any fragment whose
+      // metric bbox contains the marker's center is that sheet's outline
+      // (a real object can't cover the marker), so it isn't measured.
+      if (bbox.x0 < s / 2 && bbox.x1 > s / 2 && bbox.y0 < s / 2 && bbox.y1 > s / 2) continue;
+
+      fragments.push({ pts, bbox });
     } finally {
       cnt.delete();
     }

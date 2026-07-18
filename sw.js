@@ -1,4 +1,4 @@
-const CACHE = 'object-dimensions-v4';
+const CACHE = 'object-dimensions-v6';
 const ASSETS = [
   './',
   'index.html',
@@ -6,7 +6,6 @@ const ASSETS = [
   'js/app.js',
   'js/aruco.js',
   'js/measure.js',
-  'js/camera.js',
   'js/worker.js',
   'vendor/opencv.js',
   'manifest.webmanifest',
@@ -21,8 +20,9 @@ const ASSETS = [
 
 // Large/immutable assets stay cache-first; the app shell is network-first so
 // deployed updates reach users on the next load instead of being pinned to a
-// stale cache forever.
-const CACHE_FIRST = /vendor\/opencv\.js$|icons\/|marker\/aruco/;
+// stale cache forever. The AI model (vendor/imgly, ~80 MB) is intentionally
+// NOT precached — it downloads on first AI use and is then cached for offline.
+const CACHE_FIRST = /vendor\/opencv\.js$|vendor\/imgly\/|icons\/|marker\/aruco/;
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
